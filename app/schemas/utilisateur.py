@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, ConfigDict
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
 class UtilisateurCreate(BaseModel):
     full_name: str
@@ -11,15 +12,16 @@ class UtilisateurCreate(BaseModel):
 class UtilisateurLogin(BaseModel):
     telephone: str
     mot_de_passe: str
-
 class UtilisateurResponse(BaseModel):
-    id_utilisateur: int
+    id_utilisateur: UUID
     full_name: str
     email: EmailStr
     telephone: str
     role: str
     is_verified: bool
-    date_creation: Optional[datetime] = None
+
+    date_creation: datetime
+    date_modification: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

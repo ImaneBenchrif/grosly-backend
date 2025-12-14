@@ -1,5 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
+from uuid import UUID
+
 
 class CategorieCreate(BaseModel):
     nom: str
@@ -8,10 +10,9 @@ class CategorieCreate(BaseModel):
 
 
 class CategorieResponse(BaseModel):
-    id_categorie: int
+    id_categorie: UUID
     nom: str
-    image: Optional[str]
-    description: Optional[str]
+    image: Optional[str] = None
+    description: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

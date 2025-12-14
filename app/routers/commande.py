@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime
+from uuid import UUID
 import uuid
 
 from app.database import get_db
@@ -17,13 +17,20 @@ router = APIRouter(
     tags=["Commandes"]
 )
 
-@router.post("/", response_model=CommandeResponse, status_code=status.HTTP_201_CREATED)
+# ======================================================
+# POST /commandes → créer une commande depuis le panier
+# ======================================================
+@router.post(
+    "/",
+    response_model=CommandeResponse,
+    status_code=status.HTTP_201_CREATED
+)
 def creer_commande(
     data: CommandeCreate,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_user)
 ):
-    # 1️⃣ récupérer le panier actif
+    # 1️⃣ Panier actif
     panier = db.query(Panier).filter(
         Panier.id_utilisateur == current_user.id_utilisateur,
         Panier.statut == "actif"
@@ -45,38 +52,83 @@ def creer_commande(
             detail="Panier vide"
         )
 
-    # 2️⃣ calculer le total
+    # 2️⃣ Calcul total
     montant_total = sum(
-        ligne.quantite * ligne.prix_unitaire
-        for ligne in lignes_panier
+        lp.quantite * lp.prix_unitaire
+        for lp in lignes_panier
     )
 
-    # 3️⃣ créer la commande
-    nouvelle_commande = Commande(
-        numero_commande=str(uuid.uuid4()),
+    # 3️⃣ Création commande
+    commande = Commande(
+        numero_commande=f"CMD-{uuid.uuid4().hex[:10].upper()}",
         id_utilisateur=current_user.id_utilisateur,
         id_adresse=data.id_adresse,
         montant_total=montant_total,
         notes=data.notes
     )
 
-    db.add(nouvelle_commande)
-    db.flush()  # pour avoir id_commande
+    db.add(commande)
+    db.flush()  # récupérer id_commande
 
-    # 4️⃣ copier lignes panier → lignes commande
-    for ligne in lignes_panier:
-        ligne_cmd = LigneCommande(
-            id_commande=nouvelle_commande.id_commande,
-            id_produit=ligne.id_produit,
-            quantite=ligne.quantite,
-            prix_unitaire=ligne.prix_unitaire
+    # 4️⃣ Copier lignes panier → lignes commande
+    for lp in lignes_panier:
+        db.add(
+            LigneCommande(
+                id_commande=commande.id_commande,
+                id_produit=lp.id_produit,
+                quantite=lp.quantite,
+                prix_unitaire=lp.prix_unitaire
+            )
         )
-        db.add(ligne_cmd)
 
-    # 5️⃣ fermer le panier
-    panier.statut = "fermé"
+    # 5️⃣ Fermer panier
+    panier.statut = "ferme"
 
     db.commit()
-    db.refresh(nouvelle_commande)
+    db.refresh(commande)
 
-    return nouvelle_commande
+    return commande
+
+
+# ======================================================
+# GET /commandes → lister les commandes de l'utilisateur
+# ======================================================
+@router.get(
+    "/",
+    response_model=list[CommandeResponse]
+)
+def lister_commandes(
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_user)
+):
+    commandes = db.query(Commande).filter(
+        Commande.id_utilisateur == current_user.id_utilisateur
+    ).order_by(Commande.date_creation.desc()).all()
+
+    return commandes
+
+
+# ======================================================
+# GET /commandes/{id_commande} → détail commande
+# ======================================================
+@router.get(
+    "/{id_commande}",
+    response_model=CommandeResponse
+)
+def get_commande(
+    id_commande: UUID,
+    db: Session = Depends(get_db),
+    current_user: Utilisateur = Depends(get_current_user)
+):
+    commande = db.query(Commande).filter(
+        Commande.id_commande == id_commande,
+        Commande.id_utilisateur == current_user.id_utilisateur
+    ).first()
+
+    if not commande:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Commande introuvable"
+        )
+
+    return commande

@@ -1,13 +1,14 @@
 from fastapi import FastAPI
 
 from app.routers import (
-    produit,
     utilisateur,
     categorie,
+    produit,
     panier,
     commande,
     paiement,
-    livraison
+    livraison,
+    adresse   # 👈 AJOUT ICI
 )
 
 app = FastAPI(title="GroSly API")
@@ -19,7 +20,7 @@ app.include_router(produit.router)
 app.include_router(panier.router)
 app.include_router(commande.router)
 app.include_router(paiement.router)
-
+app.include_router(adresse.router)
 app.include_router(livraison.router)
 
 @app.get("/")

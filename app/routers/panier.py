@@ -1,14 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from uuid import UUID
 
 from app.database import get_db
 from app.models.panier import Panier
 from app.models.ligne_panier import LignePanier
 from app.models.produit import Produit
-from app.schemas.panier import (
-    PanierResponse,
-    LignePanierCreate
-)
+from app.schemas.panier import PanierResponse, LignePanierCreate
 from app.routers.utilisateur import get_current_user
 from app.models.utilisateur import Utilisateur
 
@@ -16,7 +14,14 @@ router = APIRouter(
     prefix="/panier",
     tags=["Panier"]
 )
-def get_or_create_panier(db: Session, utilisateur_id: int) -> Panier:
+
+# ======================================================
+# Utilitaire : récupérer ou créer panier actif
+# ======================================================
+def get_or_create_panier(
+    db: Session,
+    utilisateur_id: UUID
+) -> Panier:
     panier = db.query(Panier).filter(
         Panier.id_utilisateur == utilisateur_id,
         Panier.statut == "actif"
@@ -29,13 +34,22 @@ def get_or_create_panier(db: Session, utilisateur_id: int) -> Panier:
         db.refresh(panier)
 
     return panier
+
+
+# ======================================================
+# Voir le panier
+# ======================================================
 @router.get("/", response_model=PanierResponse)
 def get_panier(
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_user)
 ):
-    panier = get_or_create_panier(db, current_user.id_utilisateur)
-    return panier
+    return get_or_create_panier(db, current_user.id_utilisateur)
+
+
+# ======================================================
+# Ajouter produit au panier
+# ======================================================
 @router.post("/ajouter", response_model=PanierResponse)
 def ajouter_au_panier(
     ligne: LignePanierCreate,
@@ -50,7 +64,7 @@ def ajouter_au_panier(
 
     if not produit:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Produit introuvable"
         )
 
@@ -74,6 +88,11 @@ def ajouter_au_panier(
     db.refresh(panier)
 
     return panier
+
+
+# ======================================================
+# Modifier quantité
+# ======================================================
 @router.put("/modifier", response_model=PanierResponse)
 def modifier_quantite(
     ligne: LignePanierCreate,
@@ -89,18 +108,27 @@ def modifier_quantite(
 
     if not ligne_panier:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Produit non présent dans le panier"
         )
 
     ligne_panier.quantite = ligne.quantite
+
     db.commit()
     db.refresh(panier)
 
     return panier
-@router.delete("/supprimer/{id_produit}", response_model=PanierResponse)
+
+
+# ======================================================
+# Supprimer un produit du panier
+# ======================================================
+@router.delete(
+    "/supprimer/{id_produit}",
+    response_model=PanierResponse
+)
 def supprimer_produit(
-    id_produit: int,
+    id_produit: UUID,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_user)
 ):
@@ -113,7 +141,7 @@ def supprimer_produit(
 
     if not ligne:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Produit non présent dans le panier"
         )
 

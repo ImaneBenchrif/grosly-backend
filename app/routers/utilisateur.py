@@ -1,10 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from uuid import UUID
 
 from app.database import get_db
 from app.models.utilisateur import Utilisateur
-from app.schemas.utilisateur import UtilisateurCreate, UtilisateurResponse
+from app.schemas.utilisateur import (
+    UtilisateurCreate,
+    UtilisateurResponse,
+    TokenResponse
+)
 from app.utils.security import (
     hash_password,
     verify_password,
@@ -12,7 +17,9 @@ from app.utils.security import (
     decode_access_token
 )
 
-# OAuth2 config (Swagger Authorize)
+# ======================================================
+# OAuth2 configuration (Swagger Authorize)
+# ======================================================
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/utilisateurs/login")
 
 router = APIRouter(
@@ -67,9 +74,12 @@ def register(
 
 
 # ======================================================
-# LOGIN (OAuth2 / JWT)
+# LOGIN (OAuth2 + JWT)
 # ======================================================
-@router.post("/login")
+@router.post(
+    "/login",
+    response_model=TokenResponse
+)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
@@ -92,16 +102,18 @@ def login(
         data={"sub": str(utilisateur.id_utilisateur)}
     )
 
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
+    return TokenResponse(
+        access_token=access_token
+    )
 
 
 # ======================================================
 # GET CURRENT USER (/me)
 # ======================================================
-@router.get("/me", response_model=UtilisateurResponse)
+@router.get(
+    "/me",
+    response_model=UtilisateurResponse
+)
 def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
@@ -114,7 +126,7 @@ def get_current_user(
             detail="Token invalide"
         )
 
-    user_id = int(payload["sub"])
+    user_id = UUID(payload["sub"])
 
     utilisateur = db.query(Utilisateur).filter(
         Utilisateur.id_utilisateur == user_id
@@ -132,6 +144,11 @@ def get_current_user(
 # ======================================================
 # LIST USERS (optionnel / admin)
 # ======================================================
-@router.get("/", response_model=list[UtilisateurResponse])
-def get_utilisateurs(db: Session = Depends(get_db)):
+@router.get(
+    "/",
+    response_model=list[UtilisateurResponse]
+)
+def get_utilisateurs(
+    db: Session = Depends(get_db)
+):
     return db.query(Utilisateur).all()

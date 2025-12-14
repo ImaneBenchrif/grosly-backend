@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from app.database import get_db
 from app.models.livraison import Livraison
@@ -13,30 +14,54 @@ router = APIRouter(
     prefix="/livraisons",
     tags=["Livraison"]
 )
-@router.post("/{id_commande}", response_model=LivraisonResponse)
+
+# =========================
+# Créer une livraison
+# =========================
+@router.post(
+    "/{id_commande}",
+    response_model=LivraisonResponse,
+    status_code=status.HTTP_201_CREATED
+)
 def creer_livraison(
-    id_commande: int,
+    id_commande: UUID,
     data: LivraisonCreate,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_user)
 ):
+    # 1️⃣ Vérifier la commande
     commande = db.query(Commande).filter(
         Commande.id_commande == id_commande,
         Commande.id_utilisateur == current_user.id_utilisateur
     ).first()
 
     if not commande:
-        raise HTTPException(status_code=404, detail="Commande introuvable")
+        raise HTTPException(
+            status_code=404,
+            detail="Commande introuvable"
+        )
 
+    # 2️⃣ Vérifier paiement
+    if commande.statut != "payee":
+        raise HTTPException(
+            status_code=400,
+            detail="Commande non payée"
+        )
+
+    # 3️⃣ Vérifier livraison existante
     if commande.livraison:
-        raise HTTPException(status_code=400, detail="Livraison déjà créée")
+        raise HTTPException(
+            status_code=400,
+            detail="Livraison déjà créée"
+        )
 
+    # 4️⃣ Créer livraison
     livraison = Livraison(
         id_commande=id_commande,
         type_livraison=data.type_livraison,
         statut="en_preparation",
         date_livraison_prevue=datetime.utcnow() + timedelta(days=2),
-        numero_suivi=f"TRACK-{id_commande}-{int(datetime.utcnow().timestamp())}"
+        numero_suivi=f"TRACK-{str(id_commande)[:8]}-{int(datetime.utcnow().timestamp())}"
     )
 
     db.add(livraison)
@@ -44,9 +69,17 @@ def creer_livraison(
     db.refresh(livraison)
 
     return livraison
-@router.get("/{id_commande}", response_model=LivraisonResponse)
+
+
+# =========================
+# Consulter la livraison
+# =========================
+@router.get(
+    "/{id_commande}",
+    response_model=LivraisonResponse
+)
 def get_livraison(
-    id_commande: int,
+    id_commande: UUID,
     db: Session = Depends(get_db),
     current_user: Utilisateur = Depends(get_current_user)
 ):
@@ -56,6 +89,9 @@ def get_livraison(
     ).first()
 
     if not livraison:
-        raise HTTPException(status_code=404, detail="Livraison introuvable")
+        raise HTTPException(
+            status_code=404,
+            detail="Livraison introuvable"
+        )
 
     return livraison
