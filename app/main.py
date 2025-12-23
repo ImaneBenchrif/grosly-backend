@@ -9,7 +9,8 @@ from app.routers import (
     commande,
     paiement,
     livraison,
-    adresse
+    adresse,
+    chatbot   # ✅ AJOUT
 )
 
 app = FastAPI(title="GroSly API")
@@ -36,6 +37,7 @@ app.include_router(commande.router)
 app.include_router(paiement.router)
 app.include_router(adresse.router)
 app.include_router(livraison.router)
+app.include_router(chatbot.router)   # ✅ AJOUT
 
 # =========================
 # ROOT
